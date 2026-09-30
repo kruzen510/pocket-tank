@@ -55,7 +55,7 @@
 #define BAT_DIV_DEN       1
 #define PIN_RGB_LED       42       /* one WS2812B: never driven, so it stays dark */
 /* ES8311 on its own I2S pins, an FM8002E speaker amp; the amp's enable is ACTIVE LOW per
- * the LCDWIKI page (IO1 low = amp on): confirm by ear on the first build */
+ * the LCDWIKI page (IO1 low = amp on); confirmed by ear on the board, 2026-09-30 */
 #define PIN_I2S_MCLK      4
 #define PIN_I2S_BCLK      5
 #define PIN_I2S_WS        7
@@ -67,7 +67,8 @@
 #define ES3C28P_PANEL_H   320
 #define ES3C28P_VIEW_W    320      /* the tank on this panel: landscape, scaled (x 0.714, y 0.652) */
 #define ES3C28P_VIEW_H    240
-/* Panel orientation (ILI9341 MADCTL after swap_xy) and colour, tuned on the bench. */
+/* Panel orientation (ILI9341 MADCTL after swap_xy) and colour: bench-verified 2026-09-30
+ * (upright with USB-C on the right; POCKET_TANK_ES3C28P_FLIP turns it 180 degrees). */
 #define ES3C28P_MIRROR_X  0
 #define ES3C28P_MIRROR_Y  0
 #define ES3C28P_INVERT    1        /* IPS panel: inversion on */

@@ -30,15 +30,24 @@ What differs from the AMOLED build (see `board_pins.h` for every pin):
 - which edge is the bottom is a build choice (no IMU): `POCKET_TANK_ES3C28P_FLIP`
   in menuconfig turns the picture and the touch 180 degrees together
 
-## Bring-up: what was assumed and must be checked on the board
+## Bring-up status (bench, 2026-09-30, one board)
 
-The pin table is the vendor's; these are not (all in `board_pins.h`):
-- `ES3C28P_MIRROR_X/Y`, `ES3C28P_INVERT`, and the RGB order in `display_port_ili9341.c`:
-  a mirrored, upside-down, or colour-swapped picture is one of these
-- `ES3C28P_TOUCH_VX/VY`: the boot log prints `press: raw (x,y) -> tank (x,y)` for
-  the first 40 presses; tap the four corners and the mapping falls out
-- `BAT_DIV_NUM/DEN`: the divider on GPIO9 is assumed 1:1 (VBAT = 2 x pin);
-  check against a meter on a real cell
-- `AMP_ACTIVE_LEVEL`: the amp enable's polarity, checked by ear
-- the boot log line `I2C (SDA 16, SCL 15) answers at:` should list 0x18 (ES8311)
-  and 0x38 (FT6336G); if 0x18 is missing the codec is on another bus
+Checked on the board and by eye / ear:
+- picture upright with the default settings, USB-C on the right; colours right
+  (`ES3C28P_MIRROR_X/Y` 0/0, `ES3C28P_INVERT` 1, BGR element order); turn it with
+  `POCKET_TANK_ES3C28P_FLIP`
+- touch: the four corner taps land in the four corners. The FT6336G's raw y runs with
+  the view's x, its raw x against the view's y (`ES3C28P_TOUCH_VX/VY`). The boot log
+  prints `press: raw (x,y) -> tank (x,y)` for the first 40 presses, which is how to
+  recalibrate a unit that differs
+- sound plays: the amp enable is active low (`AMP_ACTIVE_LEVEL` 0)
+- the boot log line `I2C (SDA 16, SCL 15) answers at:` lists 0x18 (ES8311) and 0x38
+  (FT6336G): one bus for both
+- about 13 fps: the 40 MHz SPI link needs ~32 ms a frame and runs after the render
+
+Not checked:
+- `BAT_DIV_NUM/DEN`: the divider on GPIO9 is assumed 1:1 (VBAT = 2 x pin). With no cell
+  plugged in the pin reads about 2.07 V (VBAT ~4.14 V, the charger's open output), which
+  fits 1:1, but it needs a meter on a real cell. With no cell the gauge reads that
+  voltage as a nearly full, charging battery: there is no way to tell "no cell" from a full
+  one on this board
