@@ -51,7 +51,7 @@
 #define I2C_ADDR_FT3168   0x38     /* the FT6336G answers as the FT5x06 family */
 #define I2C_ADDR_CST816   0x15     /* not on this board; touch_port still names it */
 #define PIN_BAT_ADC       9        /* ADC1 ch8: the cell through a divider */
-#define BAT_DIV_NUM       2        /* VBAT = pin x NUM / DEN. ASSUMED 100k/100k: check with a meter on a cell */
+#define BAT_DIV_NUM       2        /* VBAT = pin x NUM / DEN: a 1:1 divider; a cell at 4.1 V (meter) read 4.12 V here, 2026-09-30 */
 #define BAT_DIV_DEN       1
 #define PIN_RGB_LED       42       /* one WS2812B: never driven, so it stays dark */
 /* ES8311 on its own I2S pins, an FM8002E speaker amp; the amp's enable is ACTIVE LOW per

@@ -45,9 +45,14 @@ Checked on the board and by eye / ear:
   (FT6336G): one bus for both
 - about 13 fps: the 40 MHz SPI link needs ~32 ms a frame and runs after the render
 
-Not checked:
-- `BAT_DIV_NUM/DEN`: the divider on GPIO9 is assumed 1:1 (VBAT = 2 x pin). With no cell
-  plugged in the pin reads about 2.07 V (VBAT ~4.14 V, the charger's open output), which
-  fits 1:1, but it needs a meter on a real cell. With no cell the gauge reads that
-  voltage as a nearly full, charging battery: there is no way to tell "no cell" from a full
-  one on this board
+- battery divider: `BAT_DIV_NUM/DEN` = 2/1 (VBAT = 2 x the GPIO9 pin, a 1:1 divider). A
+  cell that measured 4.1 V on a meter read 4.12 V on the board (pin 2.06 V) with it
+  connected and USB plugged in, so the ratio holds to the meter's resolution (0.1 V).
+  Not measured: the board on battery alone, at a lower voltage, to check the slope
+
+Worth knowing:
+- with no cell plugged in the pin reads about 2.07 V (the charger's open output), almost
+  the same as a charged cell, so the gauge shows a nearly full, charging battery: there is
+  no way to tell "no cell" from a full one on this board
+- "on the cable" is the chip's own USB seeing a host; a wall charger with no data lines
+  looks like "on battery" (the level shown is still the voltage-based one)
