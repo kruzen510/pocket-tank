@@ -7,6 +7,21 @@ menu "pocket-tank"
             CST816T touch, battery by ADC, the PWR key on SYS_OUT / SYS_EN. The ES8311
             audio port cannot be used on this board (its I2S pins are the LCD's).
             Build with: idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.lcd169" build
+    config POCKET_TANK_BOARD_ES3C28P
+        bool "Board: Hosyond / LCDWIKI ESP32-S3 2.8in (ES3C28P: ILI9341V 240x320 + FT6336G) instead of the AMOLED-1.8"
+        default n
+        help
+            Drives the 2.8in LCD board: ILI9341V over SPI (the tank scaled to 320x240, landscape),
+            FT6336G touch, battery by ADC (no PMIC, no IMU, no RTC), ES8311 audio on its own I2S pins.
+            Choose at most one of the BOARD_* options.
+            Build with: idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.es3c28p" build
+    config POCKET_TANK_ES3C28P_FLIP
+        bool "ES3C28P: turn the picture 180 degrees (USB-C on the other side)"
+        depends on POCKET_TANK_BOARD_ES3C28P
+        default n
+        help
+            The board has no IMU to pick the upright side, so which edge is the bottom is a build
+            choice. Touch follows.
     config POCKET_TANK_DISPLAY_SH8601
         bool "Drive the Waveshare 1.8in AMOLED (SH8601 / CO5300 over QSPI)"
         default n

@@ -1,0 +1,9 @@
+# Hosyond / LCDWIKI ESP32-S3 2.8in (ES3C28P) overlay - layered on sdkconfig.defaults:
+#   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.es3c28p" build
+# (delete any old sdkconfig / build dir first so these take effect)
+# The module is an ESP32-S3-WROOM-1 N16R8: 16 MB quad flash + 8 MB octal PSRAM, the same
+# memory the base defaults assume, so nothing here touches flash or PSRAM.
+CONFIG_POCKET_TANK_BOARD_ES3C28P=y
+CONFIG_POCKET_TANK_DISPLAY_SH8601=n
+CONFIG_POCKET_TANK_TOUCH_FT3168=y
+CONFIG_POCKET_TANK_AUDIO_ES8311=y

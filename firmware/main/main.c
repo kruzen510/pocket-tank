@@ -58,7 +58,7 @@ extern void board_power_hold(void);        /* battery_port_lcd169.c: SYS_EN high
  * be the one key the keeper ever presses - press to sleep, press to wake. */
 #define BTN_SLEEP GPIO_NUM_0
 static bool s_pmic;                        /* an AXP2101 answered: the PWR key exists, power-off is real */
-#if defined(CONFIG_POCKET_TANK_DISPLAY_SH8601) || defined(CONFIG_POCKET_TANK_BOARD_LCD169)
+#if defined(CONFIG_POCKET_TANK_DISPLAY_SH8601) || defined(CONFIG_POCKET_TANK_BOARD_LCD169) || defined(CONFIG_POCKET_TANK_BOARD_ES3C28P)
 extern i2c_master_bus_handle_t board_i2c_bus(void);
 #else
 static i2c_master_bus_handle_t board_i2c_bus(void) { return NULL; }

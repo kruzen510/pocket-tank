@@ -35,6 +35,26 @@ static bool rtc_write(const struct tm *t) {
 }
 
 bool rtc_port_init(i2c_master_bus_handle_t bus) {
+    /* A board with no RTC on its bus (the ES3C28P): nothing answers at 0x51, and reading it would
+     * "seed" the clock from the build time on EVERY boot - a deep-sleep wake included, which
+     * would throw away the time the chip kept through the sleep. Seed only a clock that is not
+     * already valid; a power loss then restarts from the build time, and the save's stamp (from
+     * the longer-lived clock) is ahead of it, so no absence is simulated: the safe side. */
+    if (bus && i2c_master_probe(bus, PCF85063_ADDR, 50) != ESP_OK) {
+        if (time(NULL) < 1700000000) {
+            static const char mon[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+            char ms[4] = {0}; int d, y, hh, mm, ss; struct tm t;
+            sscanf(__DATE__, "%3s %d %d", ms, &d, &y); sscanf(__TIME__, "%d:%d:%d", &hh, &mm, &ss);
+            memset(&t, 0, sizeof t);
+            t.tm_mon = (int)((strstr(mon, ms) - mon) / 3); t.tm_mday = d; t.tm_year = y - 1900;
+            t.tm_hour = hh; t.tm_min = mm; t.tm_sec = ss;
+            struct timeval tv = { .tv_sec = mktime(&t) }; settimeofday(&tv, NULL);
+            ESP_LOGW(TAG, "no RTC on this board; clock seeded from build time %s %s", __DATE__, __TIME__);
+        } else {
+            ESP_LOGI(TAG, "no RTC on this board; the system clock kept its time");
+        }
+        return false;
+    }
     i2c_device_config_t cfg = { .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = PCF85063_ADDR, .scl_speed_hz = 400000 };
     if (!bus || i2c_master_bus_add_device(bus, &cfg, &s_dev) != ESP_OK) { ESP_LOGW(TAG, "no RTC"); return false; }
     struct tm t;

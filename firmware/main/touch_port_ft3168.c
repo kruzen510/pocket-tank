@@ -98,13 +98,28 @@ void touch_port_poll(tank_t *t) {
     /* the CST816T's x runs opposite to the panel's logical x (measured on the
        bench 2026-09-27: NEXT at the bottom read raw x ~27) */
     float ty = touched ? (s_inverted ? (float)x[0] : (float)(LCD169_VIEW_H - 1 - x[0])) * ky - s_bias_y : s_ly;
+#elif defined(CONFIG_POCKET_TANK_BOARD_ES3C28P)
+    /* 2.8in LCD: the panel shows the tank scaled to ES3C28P_VIEW_W x _H, landscape
+     * (display_port_ili9341.c); the FT6336G reports the panel's native portrait
+     * frame, board_pins.h maps a raw point to the upright view, and a flipped
+     * picture (the IMU-less board's build-time choice XOR the flip) mirrors both */
+    const float kx = (float)TANK_W / ES3C28P_VIEW_W, ky = (float)TANK_H / ES3C28P_VIEW_H;
+    const bool flipped = s_inverted != (ES3C28P_FLIP != 0);
+    float vx = touched ? (float)ES3C28P_TOUCH_VX(x[0], y[0]) : 0, vy = touched ? (float)ES3C28P_TOUCH_VY(x[0], y[0]) : 0;
+    if (flipped) { vx = ES3C28P_VIEW_W - 1 - vx; vy = ES3C28P_VIEW_H - 1 - vy; }
+    float tx = touched ? vx * kx : s_lx;
+    float ty = touched ? vy * ky - s_bias_y : s_ly;
 #else
     float tx = touched ? (s_inverted ? (float)y[0] : (float)(TANK_W - 1 - y[0])) : s_lx;
     float ty = touched ? (s_inverted ? (float)(TANK_H - 1 - x[0]) : (float)x[0]) - s_bias_y : s_ly;
 #endif
     if (touched && ty < 0) ty = 0;
     if (touched && !s_down) {
-        audio_port_prewarm();                   /* the release's cue plays warm */        s_press_us = now; s_px = tx; s_py = ty;
+        audio_port_prewarm();                   /* the release's cue plays warm */
+        s_press_us = now; s_px = tx; s_py = ty;
+#ifdef CONFIG_POCKET_TANK_BOARD_ES3C28P
+        { static int logged; if (logged++ < 40) ESP_LOGI(TAG, "press: raw (%d,%d) -> tank (%.0f,%.0f)", (int)x[0], (int)y[0], tx, ty); }   /* bring-up: corner taps calibrate ES3C28P_TOUCH_* */
+#endif
         /* snapshot the school: the user aims at where a fish WAS - by release
            a darting fish has moved and the finger hid it the whole time */
         for (int i = 0; i < t->n_fish && i < N_FISH_MAX; i++) { s_fx[i] = t->fish[i].x; s_fy[i] = t->fish[i].y; }
