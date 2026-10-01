@@ -53,7 +53,11 @@ static bool s_inverted;                           /* screen 180-flipped: mirror 
  * same reason; Strato saw it on the swatch rows, 2026-09-13). Reported
  * points move UP by this many px in displayed space; director `touch bias
  * <px>` tunes it live. */
+#ifdef CONFIG_POCKET_TANK_BOARD_ES3C28P
+static int s_bias_y = 0;      /* board_pins.h's calibration is to where a fingertip is AIMED: no extra lift (it read ~6.5 px too high here) */
+#else
 static int s_bias_y = 10;
+#endif
 void touch_port_set_bias(int px) { s_bias_y = px; }
 int  touch_port_bias(void) { return s_bias_y; }
 
@@ -106,6 +110,9 @@ void touch_port_poll(tank_t *t) {
     const float kx = (float)TANK_W / ES3C28P_VIEW_W, ky = (float)TANK_H / ES3C28P_VIEW_H;
     const bool flipped = s_inverted != (ES3C28P_FLIP != 0);
     float vx = touched ? (float)ES3C28P_TOUCH_VX(x[0], y[0]) : 0, vy = touched ? (float)ES3C28P_TOUCH_VY(x[0], y[0]) : 0;
+    /* the glass reaches past the picture (about 21 view px above, 9 below): a touch on the bezel counts as an edge touch */
+    vx = vx < 0 ? 0 : vx > ES3C28P_VIEW_W - 1 ? ES3C28P_VIEW_W - 1 : vx;
+    vy = vy < 0 ? 0 : vy > ES3C28P_VIEW_H - 1 ? ES3C28P_VIEW_H - 1 : vy;
     if (flipped) { vx = ES3C28P_VIEW_W - 1 - vx; vy = ES3C28P_VIEW_H - 1 - vy; }
     float tx = touched ? vx * kx : s_lx;
     float ty = touched ? vy * ky - s_bias_y : s_ly;

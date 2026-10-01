@@ -36,10 +36,19 @@ Checked on the board and by eye / ear:
 - picture upright with the default settings, USB-C on the right; colours right
   (`ES3C28P_MIRROR_X/Y` 0/0, `ES3C28P_INVERT` 1, BGR element order); turn it with
   `POCKET_TANK_ES3C28P_FLIP`
-- touch: the four corner taps land in the four corners. The FT6336G's raw y runs with
-  the view's x, its raw x against the view's y (`ES3C28P_TOUCH_VX/VY`). The boot log
-  prints `press: raw (x,y) -> tank (x,y)` for the first 40 presses, which is how to
-  recalibrate a unit that differs
+- touch: calibrated with 12 crosshairs (a 4x3 grid in view px, a fingertip held on each),
+  a straight line per axis, 2.9 px RMS error (the placement noise; a quadratic and cross
+  terms did not help): `vx = 1.0105 * rawY - 3.36`, `vy = 248.66 - 1.1286 * rawX`
+  (`ES3C28P_TOUCH_VX/VY`). The glass is bigger than the picture vertically: raw x 0..239
+  spans view y 249 .. -21, so the top ~21 px and bottom ~9 px of the range are the bezel
+  and clamp to the edge (a swipe can start on the bezel). The fit is to where a fingertip
+  is aimed, so the AMOLED's 10 px "fingers land low" lift is off for this board
+  (`touch bias` on the director still tunes it live). The first version of this map was
+  a 1:1 flat-offset guess from four corner taps; it read 15-20 px too low at the top and
+  up to 15 px too high at the bottom. The boot log prints `press: raw (x,y) -> tank (x,y)`
+  for the first 40 presses, which is how to spot a unit that differs
+- the touch panel is polled about 30-40 times a second (tied to the ~13 fps draw loop);
+  swipes work, a separate fast sampling task would make strokes smoother
 - sound plays: the amp enable is active low (`AMP_ACTIVE_LEVEL` 0)
 - the boot log line `I2C (SDA 16, SCL 15) answers at:` lists 0x18 (ES8311) and 0x38
   (FT6336G): one bus for both

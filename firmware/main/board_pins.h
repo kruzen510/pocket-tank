@@ -79,10 +79,14 @@
 #endif
 /* Touch: the FT6336G reports x 0..239, y 0..319 in the panel's native portrait frame. These two map a
  * raw point to the view (landscape 320x240, the UPRIGHT side up); an inverted screen mirrors both.
- * Bench 2026-09-30, corner taps TL/TR/BR/BL read raw (200,9) (224,303) (18,8) (26,300): raw y runs with
- * the view's x, raw x runs AGAINST the view's y (the same single-axis flip the 1.69in board showed). */
-#define ES3C28P_TOUCH_VX(rx, ry)  (ry)
-#define ES3C28P_TOUCH_VY(rx, ry)  (ES3C28P_PANEL_W - 1 - (rx))
+ * Raw y runs with the view's x, raw x runs AGAINST the view's y (the same single-axis flip the 1.69in
+ * board showed). Calibrated on the bench 2026-10-01: 12 crosshairs (a 4x3 grid in view px), a fingertip
+ * held on each, least-squares per axis (RMS 2.9 view px, about the placement noise; a quadratic and the
+ * cross terms did not help). The glass is bigger than the picture vertically: raw x 0..239 covers view y
+ * 249 .. -21, so the top ~21 px and the bottom ~9 px of the range are the bezel (clamped to the edge in
+ * touch_port). The fit is to where a fingertip is AIMED, so touch_port adds no further lift. */
+#define ES3C28P_TOUCH_VX(rx, ry)  (1.01049f * (ry) - 3.362f)
+#define ES3C28P_TOUCH_VY(rx, ry)  (248.658f - 1.12857f * (rx))
 /* touch_port: raw range */
 #define PANEL_W           ES3C28P_PANEL_W
 #define PANEL_H           ES3C28P_PANEL_H
