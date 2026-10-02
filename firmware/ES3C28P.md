@@ -128,8 +128,11 @@ Director: `cutoff` (status), `cutoff <mV>` (set live, capped at 4200, not saved)
 
 Checked on the board (2026-10-02, with `cutoff test` on USB, no cell connected): the count
 starts at once, acts 30 s later, saves, and the board sleeps; the batlog holds the `off` row
-(93%, 4110 mV), BOOT wakes it, and the tank comes back with its fish. NOT checked: the real
-trigger (a cell on the board, USB unplugged, under the cutoff for 30 s), because that needs
-a cell connected; try it with `cutoff 4200` on a cell resting below 4.2 V, then unplug USB.
-After the cutoff the board is asleep and does not wake by itself when USB is plugged in:
-press BOOT.
+(93%, 4110 mV), BOOT wakes it, and the tank comes back with its fish. The real trigger was
+checked too (2026-10-02, a small test cell on the board, `cutoff 4200`, USB unplugged with a
+person in front of the presence sensor): the screen went dark by itself after the 30 s, the
+batlog `off` row reads the cell at 4099 mV, BOOT woke it with the fish intact, and the
+restart put the cutoff back to 3300 mV. The test cutoff is not saved, so a restart always
+returns to the compiled value. Not checked: a real discharge down to 3.3 V (hours), which
+only the cutoff's threshold, not its trigger, depends on. After the cutoff the board is
+asleep and does not wake by itself when USB is plugged in: press BOOT.
