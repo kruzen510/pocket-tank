@@ -170,15 +170,18 @@ bool audio_port_init(i2c_master_bus_handle_t bus) {
     return true;
 }
 
+static volatile bool s_muted;                  /* the screen is off (presence): nothing new is started */
+void audio_port_set_muted(bool muted) { s_muted = muted; }
+
 void audio_port_play(int cue, int pitch_q8) {
-    if (!s_ok) return;
+    if (!s_ok || s_muted) return;
     xSemaphoreTake(s_mx, portMAX_DELAY);
     bool started = audio_play(cue, pitch_q8, now_ms());
     xSemaphoreGive(s_mx);
     if (started) xTaskNotifyGive(s_task);
 }
 void audio_port_prewarm(void) {
-    if (!s_ok) return;
+    if (!s_ok || s_muted) return;
     s_quiet_since = 0;                          /* activity: the idle clock restarts */
     if (s_up) return;
     s_warm_req = true; xTaskNotifyGive(s_task);

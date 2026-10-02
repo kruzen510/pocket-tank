@@ -21,6 +21,7 @@
 #include "display_port.h"
 #include "advisor_llm_esp.h"
 #include "touch_port.h"
+#include "presence_port.h"
 #include "battery_port.h"
 #include "battery.h"
 #include "imu_port.h"
@@ -58,6 +59,7 @@ extern void board_power_hold(void);        /* battery_port_lcd169.c: SYS_EN high
  * be the one key the keeper ever presses - press to sleep, press to wake. */
 #define BTN_SLEEP GPIO_NUM_0
 static bool s_pmic;                        /* an AXP2101 answered: the PWR key exists, power-off is real */
+static bool s_screen_off;                  /* the presence sensor says nobody is near: panel + backlight off, no drawing, no sound; the tank still runs */
 #if defined(CONFIG_POCKET_TANK_DISPLAY_SH8601) || defined(CONFIG_POCKET_TANK_BOARD_LCD169) || defined(CONFIG_POCKET_TANK_BOARD_ES3C28P)
 extern i2c_master_bus_handle_t board_i2c_bus(void);
 #else
@@ -229,6 +231,7 @@ static void enter_sleep_for(int wake_after_s) {
         progression_woke(&tank);                /* a fry that was on its way: born now (2026-09-24) */
         battery_woke(&s_bh);                    /* what the gauge lost asleep is no screen-on drain */
         display_port_wake();
+        presence_port_activity(); s_screen_off = false; audio_port_set_muted(false);   /* a wake press: somebody is here */
         imu_port_wake();
         batlog_add(battery_pct(), battery_port_vbat_mv(), 0, true, "nap");
         s_snap_n = 0; s_btn_armed = false; s_btn_low_since = 0;   /* require a fresh press */
@@ -445,6 +448,13 @@ static void tank_task(void *arg) {
         touch_port_set_inverted(inv);
         touch_port_poll(&tank);
         director_poll(&tank);
+        /* the screen follows a person (presence_port.h): off = panel and backlight dark, nothing drawn, no sound;
+           the tank itself keeps ticking below. A touch (touch_port) or BOOT counts as somebody being there. */
+        { static int64_t last_src; if (now - last_src > 1000000) { last_src = now; presence_port_set_battery(battery_port_state() == BAT_ON_BATTERY); } }
+        if (!gpio_get_level(BTN_SLEEP)) presence_port_activity();
+        { bool want = presence_port_screen_wanted();
+          if (want && s_screen_off) { display_port_wake(); audio_port_set_muted(false); s_screen_off = false; ESP_LOGI(TAG, "presence: screen on (%d mm)", presence_port_distance_mm()); }
+          else if (!want && !s_screen_off) { audio_port_set_muted(true); display_port_sleep(); s_screen_off = true; ESP_LOGI(TAG, "presence: screen off"); } }
         int ans = touch_port_confirm_take();
         if (ans > 0) reset_tank();
         else if (ans < 0) ESP_LOGI(TAG, "reset prompt: tank kept");
@@ -493,7 +503,7 @@ static void tank_task(void *arg) {
             if (nb >= 0) { touch_port_dismiss(); audio_port_play(SND_ARRIVAL, AUDIO_PITCH_ONE);
                            ESP_LOGI(TAG, "a new fry, %s: birth flow up (announce, name, family; director `setup off` drops it)", tank.fish[nb].name); }
         }
-        if (fb[cur]) {
+        if (fb[cur] && !s_screen_off) {
             if (s_prefetch_pending) {                       /* prior frame's scene prefetch */
                 xSemaphoreTake(s_amc_done, portMAX_DELAY);
                 s_prefetch_pending = false;
@@ -585,7 +595,7 @@ static void tank_task(void *arg) {
             last_log = now;
         }
         int spent_ms = (int)((esp_timer_get_time() - now) / 1000);
-        int rest = 16 - spent_ms;                /* pace toward 60 fps, always yield >= 1 tick */
+        int rest = (s_screen_off ? 33 : 16) - spent_ms;   /* pace toward 60 fps (30 with the screen dark), always yield >= 1 tick */
         vTaskDelay(pdMS_TO_TICKS(rest < 1 ? 1 : rest));
     }
 }
@@ -658,6 +668,7 @@ void app_main(void) {
     audio_port_init(board_i2c_bus());  /* the sound bank + player task (docs/AUDIO.md); silent without the codec */
     tank_events_set(on_tank_event, NULL);
     imu_port_init(board_i2c_bus());   /* screen auto-flip; absent IMU = always upright */
+    presence_port_init(board_i2c_bus());   /* the screen follows a VL53L1X when the build has one; no sensor = screen always on */
     director_init();                  /* serial scenario console (filming / bench) */
     /* scene-prefetch DMA: installed only AFTER the display grabbed its SPI DMA
        channel — installed earlier, async memcpy steals SPI2's GDMA trigger

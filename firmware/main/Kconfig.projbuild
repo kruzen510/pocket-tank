@@ -22,6 +22,39 @@ menu "pocket-tank"
         help
             The board has no IMU to pick the upright side, so which edge is the bottom is a build
             choice. Touch follows.
+    config POCKET_TANK_PRESENCE_VL53L1X
+        bool "ES3C28P: the screen follows a VL53L1X time-of-flight sensor on the I2C header"
+        depends on POCKET_TANK_BOARD_ES3C28P
+        default n
+        help
+            A VL53L1X on the 4-pin I2C header (3V3, GND, SCL = GPIO15, SDA = GPIO16; XSHUT on GPIO14 if
+            wired) lights the screen when somebody is near and darkens it after they leave. The tank keeps
+            running with the screen dark. No sensor, or one that stops answering: the screen stays on.
+            Needs ESP-IDF 5.5.2 or newer (the sensor driver component).
+    config POCKET_TANK_PRESENCE_NEAR_MM
+        int "Presence: near distance (mm)"
+        depends on POCKET_TANK_PRESENCE_VL53L1X
+        range 100 1300
+        default 600
+    config POCKET_TANK_PRESENCE_HOLD_S
+        int "Presence: seconds the screen stays on after the last sign of anyone (a reading, a touch, BOOT)"
+        depends on POCKET_TANK_PRESENCE_VL53L1X
+        range 3 600
+        default 20
+    config POCKET_TANK_PRESENCE_BATTERY_PERIOD_S
+        int "Presence: seconds between readings on battery with the screen off"
+        depends on POCKET_TANK_PRESENCE_VL53L1X
+        range 1 600
+        default 5
+        help
+            A reading costs about 2 mC (18 mA for ~100 ms), so 5 s averages ~0.4 mA and 60 s ~0.03 mA,
+            against the tank's own 70-100 mA awake: the interval sets how soon a visitor lights the
+            screen, not the battery life.
+    config POCKET_TANK_PRESENCE_USB_PERIOD_MS
+        int "Presence: milliseconds between readings on USB (and while the screen is on)"
+        depends on POCKET_TANK_PRESENCE_VL53L1X
+        range 100 5000
+        default 500
     config POCKET_TANK_DISPLAY_SH8601
         bool "Drive the Waveshare 1.8in AMOLED (SH8601 / CO5300 over QSPI)"
         default n

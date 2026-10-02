@@ -19,6 +19,7 @@
 #include "setup.h"
 #include "notice.h"
 #include "audio_port.h"
+#include "presence_port.h"
 #include "progression.h"
 #include "esp_lcd_touch_ft5x06.h"
 #include "esp_lcd_touch_cst816s.h"
@@ -89,6 +90,7 @@ void touch_port_poll(tank_t *t) {
     uint16_t x[1], y[1], st[1]; uint8_t n = 0;
     esp_lcd_touch_read_data(s_tp);
     bool touched = esp_lcd_touch_get_coordinates(s_tp, x, y, st, &n, 1) && n > 0;
+    if (touched) presence_port_activity();      /* a finger on the glass: somebody is here (a no-op without a presence sensor) */
     /* portrait panel (px,py) -> landscape tank (tx,ty): tx = TANK_W-1-py, ty = px;
      * flipped screen: mirror both, so downstream gestures live in displayed space */
 #ifdef CONFIG_POCKET_TANK_BOARD_LCD169

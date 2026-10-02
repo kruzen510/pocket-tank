@@ -25,9 +25,16 @@ if(CONFIG_POCKET_TANK_AUDIO_ES8311)
 else()
     list(APPEND SRCS audio_port_stub.c)
 endif()
+set(EXTRA_REQ "")
+if(CONFIG_POCKET_TANK_PRESENCE_VL53L1X)
+    list(APPEND SRCS presence_port_vl53l1x.c)
+    list(APPEND EXTRA_REQ grrtzm__vl53l1x_library)
+else()
+    list(APPEND SRCS presence_port_stub.c)
+endif()
 idf_component_register(
     SRCS ${SRCS}
     INCLUDE_DIRS "."
-    REQUIRES tankcore llm esp_partition spi_flash esp_timer esp_driver_spi esp_driver_i2c esp_driver_i2s esp_driver_gpio esp_driver_ledc esp_adc esp_driver_usb_serial_jtag esp_lcd nvs_flash esp_app_format
+    REQUIRES tankcore llm esp_partition spi_flash esp_timer esp_driver_spi esp_driver_i2c esp_driver_i2s esp_driver_gpio esp_driver_ledc esp_adc esp_driver_usb_serial_jtag esp_lcd nvs_flash esp_app_format ${EXTRA_REQ}
     EMBED_FILES "tokenizer.bin" "../../assets/sounds/sounds.bin"
 )

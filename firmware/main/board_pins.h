@@ -54,6 +54,9 @@
 #define BAT_DIV_NUM       2        /* VBAT = pin x NUM / DEN: a 1:1 divider; a cell at 4.1 V (meter) read 4.12 V here, 2026-09-30 */
 #define BAT_DIV_DEN       1
 #define PIN_RGB_LED       42       /* one WS2812B: never driven, so it stays dark */
+/* the presence sensor (a VL53L1X on the 4-pin I2C header, 3V3 / GND / SCL 15 / SDA 16) and its spare pads */
+#define PIN_PRESENCE_XSHUT 14      /* optional reset line to the sensor (an expansion pad); unconnected is fine */
+#define PIN_PRESENCE_INT   21      /* the sensor's interrupt, RTC-capable; not used yet */
 /* ES8311 on its own I2S pins, an FM8002E speaker amp; the amp's enable is ACTIVE LOW per
  * the LCDWIKI page (IO1 low = amp on); confirmed by ear on the board, 2026-09-30 */
 #define PIN_I2S_MCLK      4

@@ -23,6 +23,7 @@ void audio_port_prewarm(void);
 void audio_port_set_volume(int level);                /* 0 off, 1 quiet, 2 normal; saved to NVS */
 int  audio_port_volume(void);
 void audio_port_set_night(bool night);
+void audio_port_set_muted(bool muted);                /* the screen is off (presence): no new cues, no pre-warming */
 void audio_port_sleep(void);                          /* silence + everything down; returns when it is */
 void audio_port_deep_sleep_pins(void);                /* right before esp_deep_sleep_start: I2S + amp CTRL driven low and HELD (2026-09-16) */
 void audio_port_tune(int codec_ms, int amp_ms, int idle_s);   /* -1 = keep; idle 0 = warm while awake; bench knobs */

@@ -65,3 +65,43 @@ Worth knowing:
   no way to tell "no cell" from a full one on this board
 - "on the cable" is the chip's own USB seeing a host; a wall charger with no data lines
   looks like "on battery" (the level shown is still the voltage-based one)
+
+- a very low cell connected alongside USB can pull the 5 V line down while it charges, and
+  Windows then reports "USB device not recognized" (seen 2026-10-02): charge a deeply
+  discharged cell on a proper charger first
+
+## Presence sensor: the screen follows a person (POCKET_TANK_PRESENCE_VL53L1X)
+
+A VL53L1X time-of-flight sensor lights the screen when somebody is near and darkens it
+after they leave. Only the display and the sound go off: the tank keeps running (and the
+model decides faster with nothing to draw, 14.4 tok/s against 12.6).
+
+Wiring, to the 4-pin I2C header: 3V3, GND, SCL = GPIO15, SDA = GPIO16. The sensor answers
+at 0x29 (no clash with 0x18 and 0x38). Optional: XSHUT to the GPIO14 pad (a hardware reset
+the firmware pulses before it starts the sensor); the interrupt pad GPIO21 is reserved for
+a later wake-on-approach and unused. Mount it facing outward at the bezel or edge.
+
+Behaviour (`presence_port.h`):
+- the screen is wanted while anyone is within the near distance (600 mm), or for the hold
+  time (20 s) after the last sign of anyone: a reading, a touch, or BOOT
+- a touch on the dark screen wakes it at once (about 0.25 s to the picture); that touch
+  is also a tap in the tank
+- no sensor, or one that stops answering (3 bad readings): the screen stays ON, and a
+  missing sensor is looked for every 5 s
+- ranging cadence: every 0.5 s on USB and while the screen is on; every 5 s on battery with
+  the screen off. A reading is ~18 mA for ~100 ms (~2 mC), so 5 s averages ~0.4 mA and 60 s
+  ~0.03 mA against the tank's own 70-100 mA: the interval sets how soon a visitor lights
+  the screen, not the battery life
+- the sound is muted while the screen is off
+
+Settings: `idf.py menuconfig` -> pocket-tank (near mm, hold s, battery period s, USB period
+ms). Live, from the director console (not saved): `presence` (status), `presence fake <mm>`
+or `fake off` (a made-up distance, so the screen logic can be tried with no sensor),
+`near <mm>`, `hold <s>`, `bat <s>`, `usb <ms>`. Needs ESP-IDF 5.5.2+ for the driver
+component (`grrtzm/vl53l1x_library`, ST's ultra-low-power API).
+
+Checked on the board (2026-10-02, with fake distances): off after the hold time, on at
+once for a near reading, a touch wakes it, off again after the hold, fail-open with no
+sensor. NOT checked: the sensor itself (init, the single-shot reading with the long-range
+config, the real range at 600 mm). If a reading never completes, the fallback is
+continuous ranging (`vl53l1x_start`) read at the cadence.
