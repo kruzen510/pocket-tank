@@ -7,6 +7,15 @@ menu "pocket-tank"
             CST816T touch, battery by ADC, the PWR key on SYS_OUT / SYS_EN. The ES8311
             audio port cannot be used on this board (its I2S pins are the LCD's).
             Build with: idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.lcd169" build
+    config POCKET_TANK_SCREEN_IDLE_S
+        int "Screen off after this many seconds without being handled (0 = never)"
+        range 0 3600
+        default 0
+        help
+            The panel and backlight go dark when nobody has touched, pressed or carried the device for this
+            long (the tank's own idle clock: a touch, a button, or the IMU feeling it handled - a pick-up, not
+            a knock on the desk) and light again the moment any of those happens. The tank keeps running
+            while dark. Needs the IMU: without one the screen stays on. 0 leaves the screen always on.
     config POCKET_TANK_DISPLAY_SH8601
         bool "Drive the Waveshare 1.8in AMOLED (SH8601 / CO5300 over QSPI)"
         default n

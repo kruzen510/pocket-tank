@@ -6,3 +6,5 @@ CONFIG_POCKET_TANK_DISPLAY_SH8601=n
 CONFIG_POCKET_TANK_TOUCH_FT3168=y
 # the ES8311 port's I2S pins (GPIO 8/9/16/45/46) are this board's LCD reset etc.
 CONFIG_POCKET_TANK_AUDIO_ES8311=n
+# the screen goes dark 30 s after the device was last touched, pressed or carried (the IMU's handled detector), lit on any of them
+CONFIG_POCKET_TANK_SCREEN_IDLE_S=30

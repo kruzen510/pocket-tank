@@ -59,6 +59,12 @@ extern void board_power_hold(void);        /* battery_port_lcd169.c: SYS_EN high
  * be the one key the keeper ever presses - press to sleep, press to wake. */
 #define BTN_SLEEP GPIO_NUM_0
 static bool s_pmic;                        /* an AXP2101 answered: the PWR key exists, power-off is real */
+/* the screen follows handling (docs: LCD169.md): the tank's own idle clock (tank.idle_s) restarts on a touch, a button
+ * or the IMU feeling the device handled; this many seconds after the last of those the panel and backlight go dark and
+ * nothing is drawn (the tank keeps running). 0 = never. No IMU: the screen stays on. */
+static int  s_screen_idle_s = CONFIG_POCKET_TANK_SCREEN_IDLE_S;
+static bool s_screen_off;                  /* the panel is dark because nobody has handled the device for s_screen_idle_s */
+static bool s_imu_ok;                      /* an IMU answered: without it nothing could wake the screen but a touch, so it stays on */
 #if defined(CONFIG_POCKET_TANK_DISPLAY_SH8601) || defined(CONFIG_POCKET_TANK_BOARD_LCD169)
 extern i2c_master_bus_handle_t board_i2c_bus(void);
 #else
@@ -232,6 +238,7 @@ static void enter_sleep_for(int wake_after_s) {
         progression_woke(&tank);                /* a fry that was on its way: born now (2026-09-24) */
         battery_woke(&s_bh);                    /* what the gauge lost asleep is no screen-on drain */
         display_port_wake();
+        s_screen_off = false; tank_handled(&tank);   /* a wake press is handling: the screen idle clock restarts */
         imu_port_wake();
         batlog_add(battery_pct(), battery_port_vbat_mv(), 0, true, "nap");
         s_snap_n = 0; s_btn_armed = false; s_btn_low_since = 0;   /* require a fresh press */
@@ -284,6 +291,10 @@ static void enter_poweroff(void) {
     deep_sleep_now(0);   /* no PMIC (QEMU / bring-up) or write failed */
 }
 void device_poweroff(void) { enter_poweroff(); }   /* director `poweroff` */
+int  device_screen_idle_s(void) { return s_screen_idle_s; }              /* director `screen` */
+void device_set_screen_idle_s(int s) { s_screen_idle_s = s < 0 ? 0 : s > 3600 ? 3600 : s; }
+bool device_screen_off(void) { return s_screen_off; }
+float device_idle_s(void) { return tank.idle_s; }
 
 /* the PWR key, asked of the PMIC ten times a second: a short press sleeps
  * (the grace, then power-off), 1.5 s powers off at once. The boot's first
@@ -449,6 +460,15 @@ static void tank_task(void *arg) {
         touch_port_set_inverted(inv);
         touch_port_poll(&tank);
         director_poll(&tank);
+        /* the screen follows handling: dark after s_screen_idle_s of nobody touching / pressing / carrying it (tank.idle_s,
+           restarted by every touch gesture, the IMU's handled detector and a wake press); lit again the moment any of them
+           happens. A page or prompt left open (ui_cover) keeps it lit; no IMU, no feature. */
+        if (s_screen_idle_s > 0 && s_imu_ok) {
+            if (!gpio_get_level(BTN_SLEEP)) tank_handled(&tank);                  /* BOOT held */
+            bool want = tank.idle_s <= (float)s_screen_idle_s || tank.ui_cover;
+            if (want && s_screen_off) { display_port_wake(); s_screen_off = false; ESP_LOGI(TAG, "screen on: handled again"); }
+            else if (!want && !s_screen_off) { display_port_sleep(); s_screen_off = true; ESP_LOGI(TAG, "screen off: not handled for %d s", s_screen_idle_s); }
+        }
         int ans = touch_port_confirm_take();
         if (ans > 0) reset_tank();
         else if (ans < 0) ESP_LOGI(TAG, "reset prompt: tank kept");
@@ -497,7 +517,7 @@ static void tank_task(void *arg) {
             if (nb >= 0) { touch_port_dismiss(); audio_port_play(SND_ARRIVAL, AUDIO_PITCH_ONE);
                            ESP_LOGI(TAG, "a new fry, %s: birth flow up (announce, name, family; director `setup off` drops it)", tank.fish[nb].name); }
         }
-        if (fb[cur]) {
+        if (fb[cur] && !s_screen_off) {
             if (s_prefetch_pending) {                       /* prior frame's scene prefetch */
                 xSemaphoreTake(s_amc_done, portMAX_DELAY);
                 s_prefetch_pending = false;
@@ -589,7 +609,7 @@ static void tank_task(void *arg) {
             last_log = now;
         }
         int spent_ms = (int)((esp_timer_get_time() - now) / 1000);
-        int rest = 16 - spent_ms;                /* pace toward 60 fps, always yield >= 1 tick */
+        int rest = (s_screen_off ? 33 : 16) - spent_ms;   /* pace toward 60 fps (30 with the screen dark), always yield >= 1 tick */
         vTaskDelay(pdMS_TO_TICKS(rest < 1 ? 1 : rest));
     }
 }
@@ -693,7 +713,7 @@ void app_main(void) {
     codec_port_init(board_i2c_bus());  /* the ES8311 fully down until a cue needs it (its digital side shares VCC3V3) */
     audio_port_init(board_i2c_bus());  /* the sound bank + player task (docs/AUDIO.md); silent without the codec */
     tank_events_set(on_tank_event, NULL);
-    imu_port_init(board_i2c_bus());   /* screen auto-flip; absent IMU = always upright */
+    s_imu_ok = imu_port_init(board_i2c_bus());   /* screen auto-flip + the handled detector; absent IMU = always upright, screen always on */
     director_init();                  /* serial scenario console (filming / bench) */
     /* scene-prefetch DMA: installed only AFTER the display grabbed its SPI DMA
        channel — installed earlier, async memcpy steals SPI2's GDMA trigger

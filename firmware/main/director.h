@@ -11,3 +11,7 @@ void device_sleep(int wake_after_s);   /* main.c: the keeper's sleep (0: grace t
 void device_fake_battery(int pct, int state);   /* main.c: the gauge reads pct% with the cable in state BAT_* (battery.h) for the pill, the battery page and the low-battery rule (b-roll); pct < 0 = the real gauge again. Not saved */
 void device_battery_log(void);          /* main.c: the battery page's numbers and the learned rates, to the log */
 void device_poweroff(void);            /* main.c: save + PMIC cut now */
+int  device_screen_idle_s(void);       /* main.c: seconds without handling before the screen goes dark (0 = never) */
+void device_set_screen_idle_s(int s);  /* main.c: set it live (not saved) */
+bool device_screen_off(void);          /* main.c: the panel is dark now */
+float device_idle_s(void);             /* main.c: seconds since the tank was last handled (touch, button, IMU) */
