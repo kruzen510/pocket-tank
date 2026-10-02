@@ -9,3 +9,5 @@ CONFIG_POCKET_TANK_TOUCH_FT3168=y
 CONFIG_POCKET_TANK_AUDIO_ES8311=y
 # the screen follows a VL53L1X on the I2C header; with no sensor fitted the screen simply stays on
 CONFIG_POCKET_TANK_PRESENCE_VL53L1X=y
+# no PMIC here: under 3.3 V on the cell for 30 s the tank saves and deep sleeps, so the cell is not drained flat
+CONFIG_POCKET_TANK_CUTOFF_MV=3300

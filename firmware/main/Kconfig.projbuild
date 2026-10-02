@@ -68,6 +68,15 @@ menu "pocket-tank"
         default n
         help
             Enable for the real board (docs/AUDIO.md). Off = stub audio port: cues compile, nothing plays.
+    config POCKET_TANK_CUTOFF_MV
+        int "Low-voltage cutoff for a board with no PMIC (mV; 0 = off)"
+        range 0 3600
+        default 0
+        help
+            On the cell (not on a cable) and under this voltage for 30 s in a row, the tank saves and goes
+            into deep sleep so the cell is not drained flat (BOOT or RESET wakes it). Only for a board whose
+            battery port has no PMIC to do it (the ES3C28P); a PMIC board (the AMOLED's AXP2101) is left alone.
+            A good Li-ion cell is about empty at 3.3 V resting; 0 leaves it off.
     config POCKET_TANK_NO_PIE
         bool "Disable the PIE SIMD inference kernel (scalar dot products)"
         default n

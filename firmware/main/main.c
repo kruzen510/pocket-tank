@@ -60,6 +60,9 @@ extern void board_power_hold(void);        /* battery_port_lcd169.c: SYS_EN high
 #define BTN_SLEEP GPIO_NUM_0
 static bool s_pmic;                        /* an AXP2101 answered: the PWR key exists, power-off is real */
 static bool s_screen_off;                  /* the presence sensor says nobody is near: panel + backlight off, no drawing, no sound; the tank still runs */
+#define LV_CONFIRM_S 30                    /* seconds under the cutoff, in a row, before the low-voltage cutoff acts: a load dip is not an empty cell */
+static int s_cutoff_mv = CONFIG_POCKET_TANK_CUTOFF_MV;   /* low-voltage cutoff on a board with no PMIC (0 = off); director `cutoff` tunes it live */
+static bool s_cutoff_test;                 /* bench: pretend the cell is under the cutoff (cable or not) so the 30 s count and the sleep run for real */
 #if defined(CONFIG_POCKET_TANK_DISPLAY_SH8601) || defined(CONFIG_POCKET_TANK_BOARD_LCD169) || defined(CONFIG_POCKET_TANK_BOARD_ES3C28P)
 extern i2c_master_bus_handle_t board_i2c_bus(void);
 #else
@@ -283,6 +286,9 @@ static void enter_poweroff(void) {
     deep_sleep_now(0);   /* no PMIC (QEMU / bring-up) or write failed */
 }
 void device_poweroff(void) { enter_poweroff(); }   /* director `poweroff` */
+int  device_cutoff_mv(void) { return s_cutoff_mv; }                       /* director `cutoff` */
+void device_set_cutoff_mv(int mv) { s_cutoff_mv = mv < 0 ? 0 : mv > 4200 ? 4200 : mv; }
+void device_cutoff_test(void) { s_cutoff_test = true; }
 
 /* the PWR key, asked of the PMIC ten times a second: a short press sleeps
  * (the grace, then power-off), 1.5 s powers off at once. The boot's first
@@ -401,6 +407,17 @@ static void battery_frame(int64_t now) {
     s_bat_chg = s_bat_state == BAT_CHARGING;
     if (!s_bat_ok) return;
     s_bat_mv = battery_port_vbat_mv();
+    /* low-voltage cutoff (a board with no PMIC cannot do it in hardware): on the cell, not staged, and under the
+       cutoff for LV_CONFIRM_S seconds in a row -> save and deep sleep, so the cell is not drained flat (BOOT or RESET
+       wakes it). A cable in, a staged gauge or a missing reading (0) resets the count. */
+    { static int64_t lv_since;
+      if (s_cutoff_mv > 0 && !s_pmic && (s_cutoff_test || (s_bat_fake < 0 && !BAT_ON_POWER(s_bat_state) && s_bat_mv > 0 && s_bat_mv < s_cutoff_mv))) {
+          if (!lv_since) { lv_since = now; ESP_LOGW(TAG, "battery %d mV is under the %d mV cutoff: confirming for %d s", s_bat_mv, s_cutoff_mv, LV_CONFIRM_S); }
+          else if (now - lv_since >= LV_CONFIRM_S * 1000000LL) {
+              ESP_LOGW(TAG, "battery cutoff: %d mV for %d s on the cell - saving and deep sleep so the cell is not drained flat (BOOT or RESET wakes it)", s_bat_mv, LV_CONFIRM_S);
+              enter_poweroff();
+          }
+      } else lv_since = 0; }
     int pct = (int)(s_bat_frac * 100 + 0.5f), edge;
     if (s_bat_fake < 0) edge = battery_tick(&s_bh, clock_port_now_unix(), dt, pct, s_bat_state);   /* a staged gauge teaches the history nothing */
     else edge = BAT_ON_POWER(s_bat_state) == was_power ? 0 : BAT_ON_POWER(s_bat_state) ? 1 : -1;

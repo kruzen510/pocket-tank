@@ -111,3 +111,25 @@ reading under 600 mm, lit again as soon as someone returned.
 NOT checked: the battery cadence (a 5 s reading interval with the screen off, which needs
 the board running off the cell), bright-sun or dark-clothing ranges, and thresholds other
 than 600 mm (`presence near <mm>` tries one live).
+
+## Low-voltage cutoff (POCKET_TANK_CUTOFF_MV)
+
+This board has no power-management chip, so nothing stops a cell being drained flat. On the
+cell (not on a cable) and under the cutoff voltage for 30 s in a row (a load dip is not an
+empty cell), the tank saves, darkens the panel and goes into deep sleep; BOOT or RESET wakes
+it. The cutoff is 3300 mV in `sdkconfig.defaults.es3c28p` (`menuconfig` -> pocket-tank; 0 =
+off), about empty for a good Li-ion cell at rest. It applies only to a board with no PMIC;
+the AMOLED's AXP2101 board is left alone. The existing low-battery notice (10%) still comes
+first. A deeply discharged cell plugged into USB can also stop Windows recognising the
+board (see above), which is the other reason to keep the cell well above empty.
+
+Director: `cutoff` (status), `cutoff <mV>` (set live, capped at 4200, not saved), `cutoff test`
+(act as if the cell were under the cutoff, cable or not: 30 s, then save + deep sleep).
+
+Checked on the board (2026-10-02, with `cutoff test` on USB, no cell connected): the count
+starts at once, acts 30 s later, saves, and the board sleeps; the batlog holds the `off` row
+(93%, 4110 mV), BOOT wakes it, and the tank comes back with its fish. NOT checked: the real
+trigger (a cell on the board, USB unplugged, under the cutoff for 30 s), because that needs
+a cell connected; try it with `cutoff 4200` on a cell resting below 4.2 V, then unplug USB.
+After the cutoff the board is asleep and does not wake by itself when USB is plugged in:
+press BOOT.
