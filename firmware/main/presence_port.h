@@ -6,9 +6,10 @@
  *     hold time after the last sign of anyone (a reading, a touch, BOOT);
  *   - no sensor, or one that stops answering: the screen stays ON (fail open);
  *   - the ranging cadence is fast on USB and while the screen is on, slow on
- *     battery with the screen off: a reading costs ~2 mC, so it hardly matters
- *     next to the tank's own draw, but it sets how soon a visitor lights it.
- * The sensor is read on a task of its own (a reading blocks ~100 ms). */
+ *     battery with the screen off: a reading costs ~0.4 mC (about 21 ms at 18 mA),
+ *     so it hardly matters next to the tank's own draw, but it sets how soon a
+ *     visitor lights it.
+ * The sensor is read on a task of its own (a reading blocks ~20-65 ms). */
 #ifndef PRESENCE_PORT_H
 #define PRESENCE_PORT_H
 #include <stdbool.h>

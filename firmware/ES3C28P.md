@@ -89,9 +89,9 @@ Behaviour (`presence_port.h`):
 - no sensor, or one that stops answering (3 bad readings): the screen stays ON, and a
   missing sensor is looked for every 5 s
 - ranging cadence: every 0.5 s on USB and while the screen is on; every 5 s on battery with
-  the screen off. A reading is ~18 mA for ~100 ms (~2 mC), so 5 s averages ~0.4 mA and 60 s
-  ~0.03 mA against the tank's own 70-100 mA: the interval sets how soon a visitor lights
-  the screen, not the battery life
+  the screen off. A reading is ~18 mA for ~21 ms (measured; ~0.4 mC), so 5 s averages
+  ~0.08 mA and 60 s ~0.007 mA against the tank's own 70-100 mA: the interval sets how
+  soon a visitor lights the screen, not the battery life
 - the sound is muted while the screen is off
 
 Settings: `idf.py menuconfig` -> pocket-tank (near mm, hold s, battery period s, USB period
@@ -100,8 +100,14 @@ or `fake off` (a made-up distance, so the screen logic can be tried with no sens
 `near <mm>`, `hold <s>`, `bat <s>`, `usb <ms>`. Needs ESP-IDF 5.5.2+ for the driver
 component (`grrtzm/vl53l1x_library`, ST's ultra-low-power API).
 
-Checked on the board (2026-10-02, with fake distances): off after the hold time, on at
+Checked on the board (2026-10-02). With fake distances: off after the hold time, on at
 once for a near reading, a touch wakes it, off again after the hold, fail-open with no
-sensor. NOT checked: the sensor itself (init, the single-shot reading with the long-range
-config, the real range at 600 mm). If a reading never completes, the fallback is
-continuous ranging (`vl53l1x_start`) read at the cadence.
+sensor. With the real sensor on the I2C cable (no XSHUT wired): found at 0x29 beside the
+codec (0x18) and touch (0x38) on the one bus, a single-shot reading takes ~21 ms (16-67),
+a person at ~52 cm reads 517-527 mm (steady to ~5 mm), a hand at 20-26 cm reads 208-259,
+an empty room reads "nothing valid" (-1) rather than a false near, a person at ~1 m reads
+~1000 mm, and the screen followed all of it: dark 3 s (the test hold) after the last
+reading under 600 mm, lit again as soon as someone returned.
+NOT checked: the battery cadence (a 5 s reading interval with the screen off, which needs
+the board running off the cell), bright-sun or dark-clothing ranges, and thresholds other
+than 600 mm (`presence near <mm>` tries one live).

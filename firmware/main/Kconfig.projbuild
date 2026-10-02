@@ -47,9 +47,9 @@ menu "pocket-tank"
         range 1 600
         default 5
         help
-            A reading costs about 2 mC (18 mA for ~100 ms), so 5 s averages ~0.4 mA and 60 s ~0.03 mA,
-            against the tank's own 70-100 mA awake: the interval sets how soon a visitor lights the
-            screen, not the battery life.
+            A reading takes ~21 ms (measured; up to ~65 ms) at ~18 mA, about 0.4 mC, so 5 s averages
+            ~0.08 mA and 60 s ~0.007 mA, against the tank's own 70-100 mA awake: the interval sets how
+            soon a visitor lights the screen, not the battery life.
     config POCKET_TANK_PRESENCE_USB_PERIOD_MS
         int "Presence: milliseconds between readings on USB (and while the screen is on)"
         depends on POCKET_TANK_PRESENCE_VL53L1X
