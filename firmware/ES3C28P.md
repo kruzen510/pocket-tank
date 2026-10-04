@@ -47,12 +47,20 @@ Checked on the board and by eye / ear:
   a 1:1 flat-offset guess from four corner taps; it read 15-20 px too low at the top and
   up to 15 px too high at the bottom. The boot log prints `press: raw (x,y) -> tank (x,y)`
   for the first 40 presses, which is how to spot a unit that differs
-- the touch panel is polled about 30-40 times a second (tied to the ~13 fps draw loop);
+- the touch panel is polled about 3 times per frame (tied to the ~17-19 fps draw loop);
   swipes work, a separate fast sampling task would make strokes smoother
 - sound plays: the amp enable is active low (`AMP_ACTIVE_LEVEL` 0)
 - the boot log line `I2C (SDA 16, SCL 15) answers at:` lists 0x18 (ES8311) and 0x38
   (FT6336G): one bus for both
-- about 13 fps: the 40 MHz SPI link needs ~32 ms a frame and runs after the render
+- about 17-19 fps (was 12-14, 2026-10-03). It was never the SPI link: scaling the 448x368 tank
+  to 320x240 took ~37 ms of CPU a frame. Now (display_port_ili9341.c) the scaling is done as a
+  row average two pixels a word, then a column average (about 4x less arithmetic, the two
+  rounding directions cancel), on a flush task BELOW the tank task so the tank queues its next
+  scene prefetch first and the scaling fills the time it spends waiting for it. What is left is
+  memory contention with the language model: with the model idle a frame is ~19 fps, and the
+  wait for the 330 KB scene-prefetch copy (~25 ms when the model streams weights, ~3 ms when
+  it does not) is the largest piece; shrinking that means a renderer that restores less of the
+  scene. The model's decisions are ~3% slower (3.6 s against 3.5 s)
 
 - battery divider: `BAT_DIV_NUM/DEN` = 2/1 (VBAT = 2 x the GPIO9 pin, a 1:1 divider). A
   cell that measured 4.1 V on a meter read 4.12 V on the board (pin 2.06 V) with it
@@ -82,8 +90,9 @@ the firmware pulses before it starts the sensor); the interrupt pad GPIO21 is re
 a later wake-on-approach and unused. Mount it facing outward at the bezel or edge.
 
 Behaviour (`presence_port.h`):
-- the screen is wanted while anyone is within the near distance (600 mm), or for the hold
-  time (20 s) after the last sign of anyone: a reading, a touch, or BOOT
+- the screen is wanted while anyone is within the near distance (1000 mm in
+  `sdkconfig.defaults.es3c28p`; the Kconfig default is 600), or for the hold time (30 s there;
+  Kconfig default 20) after the last sign of anyone: a reading, a touch, or BOOT
 - a touch on the dark screen wakes it at once (about 0.25 s to the picture); that touch
   is also a tap in the tank
 - no sensor, or one that stops answering (3 bad readings): the screen stays ON, and a
@@ -108,9 +117,14 @@ a person at ~52 cm reads 517-527 mm (steady to ~5 mm), a hand at 20-26 cm reads 
 an empty room reads "nothing valid" (-1) rather than a false near, a person at ~1 m reads
 ~1000 mm, and the screen followed all of it: dark 3 s (the test hold) after the last
 reading under 600 mm, lit again as soon as someone returned.
+At 1000 mm (2026-10-03, walking toward and away from the board with a 3 s test hold): readings
+read valid out to at least 1.2 m; the screen stayed dark while the person hovered at 1.0-1.2 m
+(1033-1211 mm), lit when they came inside 1 m (819 mm), stayed on at ~54 cm, and went dark
+3 s after they backed off to ~1.16 m. A person standing right at the threshold does not make
+the screen flicker, because the hold time bridges the gaps between readings.
 NOT checked: the battery cadence (a 5 s reading interval with the screen off, which needs
-the board running off the cell), bright-sun or dark-clothing ranges, and thresholds other
-than 600 mm (`presence near <mm>` tries one live).
+the board running off the cell) and bright-sun or dark-clothing ranges (the long-range
+config measures to ~1.3 m in ideal conditions; a dark target in sunlight reads shorter).
 
 ## Low-voltage cutoff (POCKET_TANK_CUTOFF_MV)
 

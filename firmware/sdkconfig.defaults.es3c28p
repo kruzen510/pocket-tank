@@ -9,5 +9,9 @@ CONFIG_POCKET_TANK_TOUCH_FT3168=y
 CONFIG_POCKET_TANK_AUDIO_ES8311=y
 # the screen follows a VL53L1X on the I2C header; with no sensor fitted the screen simply stays on
 CONFIG_POCKET_TANK_PRESENCE_VL53L1X=y
+# the screen stays on 30 s after the last sign of anyone (was 20; the Kconfig default stays 20)
+CONFIG_POCKET_TANK_PRESENCE_HOLD_S=30
+# and lights for anyone within 1000 mm (was 600; the Kconfig default stays 600)
+CONFIG_POCKET_TANK_PRESENCE_NEAR_MM=1000
 # no PMIC here: under 3.3 V on the cell for 30 s the tank saves and deep sleeps, so the cell is not drained flat
 CONFIG_POCKET_TANK_CUTOFF_MV=3300

@@ -23,6 +23,7 @@
 #include "esp_lcd_ili9341.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -45,6 +46,14 @@ static bool s_bl_ready, s_asleep;
 static bool s_lit;                              /* the first frame is on the glass: the backlight may come on */
 static uint16_t *s_stripe[2];
 static SemaphoreHandle_t s_stripe_free;
+/* the flush pipeline: display_port_flush() only hands a frame to a task of its own, which scales it into the stripes and
+ * queues the DMA, so the tank draws the next frame while this one is still on the wire (the 40 MHz SPI link needs ~31 ms
+ * a frame; done in line it was the whole frame time). s_fb_free is given while no frame is being read. */
+static TaskHandle_t s_flush_task;
+static SemaphoreHandle_t s_fb_free;
+static const uint16_t *volatile s_job_fb;
+static volatile int s_job_f;
+static void flush_task(void *arg);
 static bool s_inverted;
 /* view pixel -> the two tank columns / rows the box filter averages; [0] as drawn upright,
  * [1] for the 180-degree flipped picture (view index reversed) */
@@ -141,6 +150,8 @@ bool display_port_init(void) {
         if (!s_stripe[i]) { ESP_LOGE(TAG, "no DMA RAM for the stripes"); return false; }
     }
     s_stripe_free = xSemaphoreCreateCounting(2, 2);
+    s_fb_free = xSemaphoreCreateBinary();
+    xSemaphoreGive(s_fb_free);                  /* nothing in flight yet */
 
     bl_init();                                  /* dark until the first frame is on the glass */
     spi_bus_config_t spi = { .sclk_io_num = PIN_LCD_SCLK, .mosi_io_num = PIN_LCD_MOSI, .miso_io_num = -1,
@@ -158,11 +169,24 @@ bool display_port_init(void) {
     ESP_LOGI(TAG, "panel up: %dx%d native portrait, tank %dx%d scaled to %dx%d landscape (swap_xy, mirror %d/%d, invert %d, flip %d)",
              ES3C28P_PANEL_W, ES3C28P_PANEL_H, TANK_W, TANK_H, VIEW_W, VIEW_H,
              ES3C28P_MIRROR_X, ES3C28P_MIRROR_Y, ES3C28P_INVERT, ES3C28P_FLIP);
+    /* BELOW the tank task (4) on the tank's core: the tank queues its next scene prefetch the moment it has handed a frame
+     * over, and the scaling then runs in the time the tank spends waiting (for that prefetch, and in its frame delay) instead
+     * of hogging the core first - at the higher priority the tank sat idle ~26 ms a frame behind it (measured 2026-10-03) */
+    if (xTaskCreatePinnedToCore(flush_task, "lcdflush", 4096, NULL, 3, &s_flush_task, 0) != pdPASS) { ESP_LOGE(TAG, "no flush task"); return false; }
     return true;
+}
+
+/* every frame read and on the wire: nothing in flight, the panel may be commanded. Only the tank task flushes,
+ * so nothing new can start while this waits. */
+static void flush_quiesce(void) {
+    xSemaphoreTake(s_fb_free, portMAX_DELAY); xSemaphoreGive(s_fb_free);
+    xSemaphoreTake(s_stripe_free, portMAX_DELAY); xSemaphoreTake(s_stripe_free, portMAX_DELAY);
+    xSemaphoreGive(s_stripe_free); xSemaphoreGive(s_stripe_free);
 }
 
 void display_port_sleep(void) {
     if (!s_panel) return;
+    flush_quiesce();
     bl_write(0);
     if (!s_bl_ready) gpio_set_level(PIN_LCD_BL, 0);
     esp_lcd_panel_disp_on_off(s_panel, false);
@@ -172,6 +196,7 @@ void display_port_sleep(void) {
 
 void display_port_wake(void) {
     if (!s_panel) return;
+    flush_quiesce();
     esp_lcd_panel_disp_sleep(s_panel, false);
     panel_setup();
     s_asleep = false;
@@ -186,22 +211,20 @@ void display_port_set_brightness(uint8_t level) {
 }
 uint8_t display_port_brightness(void) { return s_brightness; }
 
-/* 2x2 box average of four RGB565 pixels: spread each into R.G.B lanes of a
- * 32-bit word (G in the top half), add, round, fold back */
-static inline uint32_t spread(uint16_t p) { return ((uint32_t)p | ((uint32_t)p << 16)) & 0x07E0F81Fu; }
-static inline uint16_t avg4(uint16_t a, uint16_t b, uint16_t c, uint16_t d) {
-    uint32_t s = spread(a) + spread(b) + spread(c) + spread(d) + 0x00401002u;   /* +2 per lane: round */
-    s = (s >> 2) & 0x07E0F81Fu;
-    uint16_t v = (uint16_t)(s | (s >> 16));
-    return (uint16_t)((v << 8) | (v >> 8));                                    /* big-endian over SPI */
-}
+/* Per-channel average of RGB565 values without unpacking them: (a & b) + ((a ^ b) >> 1), the top bit of every
+ * channel masked off the shifted half so nothing carries across channels (0x7BEF = R/B 01111, G 011111). That form
+ * rounds each channel DOWN; (a | b) - ((a ^ b) >> 1) rounds UP. The row pass rounds down and the column pass up, so
+ * the result is within one step of a true 2x2 mean and unbiased. The row pass works on two pixels per 32-bit word. */
+#define AVG_MASK2 0x7BEF7BEFu
+typedef uint32_t __attribute__((may_alias)) u32a;    /* the frame is uint16_t pixels, read two at a time */
+typedef uint16_t __attribute__((may_alias)) u16a;
+static uint16_t s_vrow[TANK_W] __attribute__((aligned(4)));   /* one source row pair, vertically averaged (internal RAM) */
 
-/* view row vy, column vx = the box average at tank (s_x0/1[vx], s_y0/1[vy]),
- * through the table set for the picture's side up. One stripe = STRIPE_ROWS
- * view rows, written to the panel while the next one is being averaged. */
-void display_port_flush(const uint16_t *fb) {
-    if (!s_panel) return;
-    const int f = (s_inverted != (ES3C28P_FLIP != 0)) ? 1 : 0;
+/* view row vy, column vx = the 2x2 box average at tank (s_x0/1[vx], s_y0/1[vy]), through the table set for the
+ * picture's side up - done in two cheap passes per view row: the two tank rows averaged across the whole width two
+ * pixels a time, then neighbouring columns averaged at the table positions (about 4x less arithmetic than averaging
+ * four pixels per output pixel). One stripe = STRIPE_ROWS view rows, written to the panel while the next one is scaled. */
+static void flush_frame(const uint16_t *fb, int f) {
     const uint16_t *x0t = s_x0[f], *x1t = s_x1[f];
     int cur = 0;
     for (int vy0 = 0; vy0 < VIEW_H; vy0 += STRIPE_ROWS) {
@@ -209,11 +232,18 @@ void display_port_flush(const uint16_t *fb) {
         xSemaphoreTake(s_stripe_free, portMAX_DELAY);
         uint16_t *stripe = s_stripe[cur];
         for (int r = 0; r < rows; r++) {
-            const uint16_t *ra = fb + s_y0[f][vy0 + r] * TANK_W, *rb = fb + s_y1[f][vy0 + r] * TANK_W;
+            const u32a *ra = (const u32a *)(fb + s_y0[f][vy0 + r] * TANK_W), *rb = (const u32a *)(fb + s_y1[f][vy0 + r] * TANK_W);
+            u32a *va32 = (u32a *)s_vrow;
+            for (int i = 0; i < TANK_W / 2; i++) {
+                uint32_t u = ra[i], v = rb[i];
+                va32[i] = (u & v) + (((u ^ v) >> 1) & AVG_MASK2);
+            }
+            const u16a *va = (const u16a *)s_vrow;
             uint16_t *dst = stripe + r * VIEW_W;
             for (int x = 0; x < VIEW_W; x++) {
-                int a = x0t[x], b = x1t[x];
-                dst[x] = avg4(ra[a], ra[b], rb[a], rb[b]);
+                uint32_t p = va[x0t[x]], q = va[x1t[x]];
+                uint32_t m = (p | q) - (((p ^ q) >> 1) & 0x7BEFu);         /* this pass rounds UP: the row pass rounded down, so the two cancel */
+                dst[x] = (uint16_t)((m << 8) | (m >> 8));                  /* big-endian over SPI */
             }
         }
         esp_err_t err = esp_lcd_panel_draw_bitmap(s_panel, 0, vy0, VIEW_W, vy0 + rows, stripe);
@@ -224,10 +254,29 @@ void display_port_flush(const uint16_t *fb) {
         }
         cur ^= 1;
     }
+    xSemaphoreGive(s_fb_free);                  /* every pixel of fb is read: the tank may draw into it again while the last stripes finish */
     if (!s_lit) {                               /* light the backlight only once there is a picture */
         s_lit = true;
         xSemaphoreTake(s_stripe_free, portMAX_DELAY); xSemaphoreTake(s_stripe_free, portMAX_DELAY);
         xSemaphoreGive(s_stripe_free); xSemaphoreGive(s_stripe_free);
         display_port_set_brightness(s_brightness);
     }
+}
+
+static void flush_task(void *arg) {
+    (void)arg;
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        flush_frame(s_job_fb, s_job_f);
+    }
+}
+
+/* Hand the frame to the flush task and return: the buffer is the caller's again once the task has read it, which the
+ * NEXT call waits for (the tank alternates two buffers, so by then it is the other one being drawn). */
+void display_port_flush(const uint16_t *fb) {
+    if (!s_panel || !s_flush_task) return;
+    xSemaphoreTake(s_fb_free, portMAX_DELAY);   /* the previous frame is fully read */
+    s_job_fb = fb;
+    s_job_f = (s_inverted != (ES3C28P_FLIP != 0)) ? 1 : 0;
+    xTaskNotifyGive(s_flush_task);
 }
